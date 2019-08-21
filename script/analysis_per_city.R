@@ -262,7 +262,29 @@ plotly.line.function(dataveg_sj,variables= c(var_veg, "total_cases",
 rm(var_veg,dataveg_iq, dataveg_sj)
 
 #### 3.0  FEATURE ENGINEERING _____________________________________________ ####
+# Try the log transformation, maybe after the prediction
+# data_iq$total_cases<- 10^data_iq$total_cases
+# data_sj$total_cases<- 10^data_sj$total_cases
+# predictions_iq<- 10^predictions_iq
+# predictions_sj<- 10^predictions_sj
+# 
+# validation_iq$total_cases<- 10^validation_iq$total_cases
+# validation_sj$total_cases<- 10^validation_sj$total_cases
 
+
+# predictions_iq<- predict(rf_iq, validation_iq)
+# predictions_iq<- round(10^predictions_iq)
+# predictions_iq
+
+# predictions_sj<- predict(rf_sj, validation_sj)
+# predictions_sj<- round(10^predictions_sj)
+# predictions_sj
+
+# Try also the lead 
+# data_iq$total_cases<- lead(data_iq$total_cases, n=3)
+# data_sj$total_cases<- lead(data_sj$total_cases, n=3)
+# data_iq<- na.omit(data_iq)
+# data_sj<- na.omit(data_sj)
 
 #### 4.0  RELATIONSHIP BETWEEEN VARIABLES #### 
 
