@@ -98,8 +98,8 @@ data_iq<-data_full %>% filter(city=="iq")
 data_sj<-data_full %>% filter(city=="sj")
 
 #### 1.3. Missing values __________________________________________________ ####
-# data<-na.locf(data)
-# validation<-na.locf(validation)
+data<-na.locf(data)
+validation<-na.locf(validation)
 
 # where and how many missing values 
 
@@ -118,6 +118,8 @@ ggplot(missing_values, aes(x=key, y=num.missing, fill=key)) +
   geom_bar(stat="identity") + 
   theme(axis.text.x = element_text(angle=60, hjust=1)) 
 
+data_sj<-na.locf(data_sj)
+data_iq<-na.locf(data_iq)
 rm(missing_values)
 
 
@@ -147,26 +149,12 @@ data_iq %>%
 # data precip st     md 45.3     max 543
 # valid precip st    md 27.2     max 212 
 
-data_iq<- data_iq %>% 
-  filter(!(source== "data" & precip_st>= 100))    # 676 -> 563
-
-
-
-
-
-
-
 data_sj %>% filter(source=="data") %>%
   select(-city, -year, - weekofyear, -month) %>%
   melt("week_start_date") %>%
   mutate(value=as.numeric(value)) %>%
   ggplot() + aes(x=variable, y=value) + 
   geom_boxplot() + coord_flip()
-
-data_sj <- data_sj %>% filter(precip_kgperm2_r < 200, total_cases < 250,
-                              precip_mm_r < 200, precip_amt < 200)
-
-
 
 #### 2.0  EXPLORATORY ANALYSIS #### 
 
@@ -274,19 +262,6 @@ plotly.line.function(dataveg_sj,variables= c(var_veg, "total_cases",
 rm(var_veg,dataveg_iq, dataveg_sj)
 
 #### 3.0  FEATURE ENGINEERING _____________________________________________ ####
-# indep_num_var<- data_full %>% select(-city, -year, -weekofyear, -week_start_date,
-#                                  -total_cases, -source, -month) %>% names()
-# 
-# data_iq[indep_num_var]<-dplyr::mutate_all(data_iq[indep_num_var], funs(lag))
-# data_sj[indep_num_var]<-dplyr::mutate_all(data_sj[indep_num_var], funs(lag))
-
-#data_iq$lag_temp_avg_st<- lag(data_iq$temp_avg_st,10)
-#data_iq$lag_ndvi_ne<- lag(data_iq$ndvi_ne,10)
-
-data_iq$total_cases<- lead(data_iq$total_cases, n=3)
-data_sj$total_cases<- lead(data_sj$total_cases, n=3)
-data_iq<- na.omit(data_iq)
-data_sj<- na.omit(data_sj)
 
 
 #### 4.0  RELATIONSHIP BETWEEEN VARIABLES #### 
@@ -312,13 +287,6 @@ rm(cat_var, data_cor_matrix_iq,data_cor_matrix_sj)
 
 
 #### 4.2. VAR IMP WITH RANDOM FOREST_______________________________________ ####
-
-# Transform dependent variable with log10
-data_iq$total_cases<- log10 (data_iq$total_cases)
-data_sj$total_cases<- log10 (data_sj$total_cases)
-
-data_iq$total_cases[!is.finite(data_iq$total_cases)]<-0
-data_sj$total_cases[!is.finite(data_sj$total_cases)]<-0
 
 # Let's remove the validation
 data_iq<- data_iq %>% filter(source=="data")
@@ -413,16 +381,10 @@ rf_sj<-randomForest(y=training_sj$total_cases,
                     importance=T,maximize=T,
                     method="rf", 
                     ntree=700)
-# Adding the feature engineering to the test
 
 
 predictions_iq<- predict(rf_iq, testing_iq)
 predictions_sj<- predict(rf_sj, testing_sj)
-
-data_iq$total_cases<- 10^data_iq$total_cases
-data_sj$total_cases<- 10^data_sj$total_cases
-predictions_iq<- 10^predictions_iq
-predictions_sj<- 10^predictions_sj
 
 postResample(predictions_iq, testing_iq$total_cases) 
 postResample(predictions_sj, testing_sj$total_cases) 
@@ -438,12 +400,8 @@ validation_sj<- validation %>% filter(city=="sj")
 validation_iq<- na.locf(validation_iq)
 validation_sj<- na.locf(validation_sj)
 
-validation_iq$total_cases<- 10^validation_iq$total_cases
-validation_sj$total_cases<- 10^validation_sj$total_cases
-
-
 predictions_iq<- predict(rf_iq, validation_iq)
-predictions_iq<- round(10^predictions_iq)
+predictions_iq<- round(predictions_iq)
 predictions_iq
 
 validation_iq<- cbind(validation_iq, total_cases=predictions_iq) %>% 
@@ -451,7 +409,7 @@ validation_iq<- cbind(validation_iq, total_cases=predictions_iq) %>%
   select(city, year, weekofyear, total_cases)
 
 predictions_sj<- predict(rf_sj, validation_sj)
-predictions_sj<- round(10^predictions_sj)
+predictions_sj<- round(predictions_sj)
 predictions_sj
 validation_sj<- cbind(validation_sj, total_cases=predictions_sj) %>% 
   arrange(week_start_date) %>%
