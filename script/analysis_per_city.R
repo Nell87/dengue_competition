@@ -149,12 +149,19 @@ data_iq %>%
 # data precip st     md 45.3     max 543
 # valid precip st    md 27.2     max 212 
 
+
+# data_iq<- data_iq %>% 
+#   filter(!(source== "data" & precip_st>= 100))    # 676 -> 563
+
 data_sj %>% filter(source=="data") %>%
   select(-city, -year, - weekofyear, -month) %>%
   melt("week_start_date") %>%
   mutate(value=as.numeric(value)) %>%
   ggplot() + aes(x=variable, y=value) + 
   geom_boxplot() + coord_flip()
+
+# data_sj <- data_sj %>% filter(precip_kgperm2_r < 200, total_cases < 250,
+#                               precip_mm_r < 200, precip_amt < 200)
 
 #### 2.0  EXPLORATORY ANALYSIS #### 
 
