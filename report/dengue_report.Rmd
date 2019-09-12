@@ -1,0 +1,83 @@
+---
+title: "Dengue competition"
+author: "Sara Marín"
+date: "12/09/2019"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 4
+    toc_float: 
+      collapsed: false
+      smooth_scroll: true
+---
+
+<html>
+  <head>
+  <style type="text/css">
+    * {
+      text-align: justify;
+    }
+    
+    h2 {
+      color: MidnightBlue;    
+      font-weight: bold;
+    }
+    
+    h3 {
+      color: MidnightBlue;    
+    }
+    
+    h4 {
+       color: SteelBlue;    
+     
+    }
+    
+  </style>
+  </head>
+  <body>
+  
+This report is intended to explain the process that I followed in the **dengue competition**. The goal is to predict the number of dengue cases each week (in two different locations) based on environmental variables describing changes in temperature, precipitation, vegetation, and more.
+
+You can read more about this competition [Here](https://www.drivendata.org/competitions/44/dengai-predicting-disease-spread/)
+
+```{r eval=TRUE, echo=FALSE, warning=FALSE, include=FALSE}
+
+# load Libraries: p_load can install, load,  and update packages
+
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(plotly)
+library(gdata)
+library(here)
+
+# # setwd
+#setwd(here::here())
+#
+# Let's read the script with the own functions
+#source("../script/functions_sara.R")
+#
+# # reading datasets
+# data_x <- read.csv("./data/dengue_features_train.csv", stringsAsFactors = F)
+# data_y<- read.csv("./data/dengue_labels_train.csv", stringsAsFactors = F)
+# data<- cbind(data_x, total_cases=data_y$total_cases)
+#
+# validation<- read.csv("./data/dengue_features_test.csv", stringsAsFactors = F)
+#
+# rm(data_x, data_y)
+```
+
+
+```{r sourceCode,echo=TRUE}
+# use source() function to source the functions we want to execute
+
+```
+
+## 1. EXPLORATORY ANALYSIS
+### 1. Every variable ###
+### 2. Relationship between variables 
+
+## 2. CLEANING 
+## 3. TRAINING
+  
+
