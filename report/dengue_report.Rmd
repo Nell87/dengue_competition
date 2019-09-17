@@ -412,4 +412,6 @@ formattable(final_variables, list(
 ))
 
 ```
-  
+
+## G. COMPLETE CODE
+If you want to check the complete code of this project, you can visit the [repository on GitHub](https://github.com/Nell87/dengue_competition)
