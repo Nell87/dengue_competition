@@ -4,6 +4,7 @@ author: "Sara Marín"
 date: "12/09/2019"
 output: 
   html_document:
+    code_folding: hide
     toc: true
     toc_depth: 4
     toc_float: 
@@ -50,34 +51,290 @@ library(lubridate)
 library(plotly)
 library(gdata)
 library(here)
+library(corrplot)
+library(weathermetrics)
+library(reshape2)
 
-# # setwd
-#setwd(here::here())
-#
-# Let's read the script with the own functions
-#source("../script/functions_sara.R")
-#
-# # reading datasets
-# data_x <- read.csv("./data/dengue_features_train.csv", stringsAsFactors = F)
-# data_y<- read.csv("./data/dengue_labels_train.csv", stringsAsFactors = F)
-# data<- cbind(data_x, total_cases=data_y$total_cases)
-#
-# validation<- read.csv("./data/dengue_features_test.csv", stringsAsFactors = F)
-#
-# rm(data_x, data_y)
+# reading datasets
+data_x <- read.csv("dengue_features_train.csv", stringsAsFactors = F)
+data_y<- read.csv("dengue_labels_train.csv", stringsAsFactors = F)
+data<- cbind(data_x, total_cases=data_y$total_cases)
+
+validation<- read.csv("dengue_features_test.csv", stringsAsFactors = F)
+
+rm(data_x, data_y)
+
+# Rename variables 
+data <- data %>% rename("precip_amt"= "precipitation_amt_mm",
+                        "precip_mm_r"= "reanalysis_sat_precip_amt_mm",
+                        "temp_dewpoint_r"="reanalysis_dew_point_temp_k",
+                        "temp_air_mean_r" = "reanalysis_air_temp_k",
+                        "humid_relative_r" = "reanalysis_relative_humidity_percent",
+                        "humid_specific_r" = "reanalysis_specific_humidity_g_per_kg",
+                        "precip_kgperm2_r" = "reanalysis_precip_amt_kg_per_m2", 
+                        "temp_max_r" = "reanalysis_max_air_temp_k",
+                        "temp_min_r" = "reanalysis_min_air_temp_k",
+                        "temp_air_avg_r" = "reanalysis_avg_temp_k", 
+                        "temp_dir_range_r" = "reanalysis_tdtr_k",
+                        "temp_max_st"= "station_max_temp_c",
+                        "temp_min_st"= "station_min_temp_c",
+                        "temp_avg_st"= "station_avg_temp_c",
+                        "precip_st" = "station_precip_mm",
+                        "temp_dir_range_st" = "station_diur_temp_rng_c")
+
+# Rename variables 
+validation <- validation %>% rename("precip_amt"= "precipitation_amt_mm",
+                                    "precip_mm_r"= "reanalysis_sat_precip_amt_mm",
+                                    "temp_dewpoint_r"="reanalysis_dew_point_temp_k",
+                                    "temp_air_mean_r" = "reanalysis_air_temp_k",
+                                    "humid_relative_r" = "reanalysis_relative_humidity_percent",
+                                    "humid_specific_r" = "reanalysis_specific_humidity_g_per_kg",
+                                    "precip_kgperm2_r" = "reanalysis_precip_amt_kg_per_m2", 
+                                    "temp_max_r" = "reanalysis_max_air_temp_k",
+                                    "temp_min_r" = "reanalysis_min_air_temp_k",
+                                    "temp_air_avg_r" = "reanalysis_avg_temp_k", 
+                                    "temp_dir_range_r" = "reanalysis_tdtr_k",
+                                    "temp_max_st"= "station_max_temp_c",
+                                    "temp_min_st"= "station_min_temp_c",
+                                    "temp_avg_st"= "station_avg_temp_c",
+                                    "precip_st" = "station_precip_mm",
+                                    "temp_dir_range_st" = "station_diur_temp_rng_c")
+
+# Transform some variables to factor/numeric/datetime
+data$week_start_date<- ymd(data$week_start_date)
+validation$week_start_date<- ymd(validation$week_start_date)
+
+data$city <- as.factor(data$city)
+data$year <- year(data$week_start_date)
+data$weekofyear<- as.factor(data$weekofyear)
+data$month<- month(data$week_start_date)
+validation$city <- as.factor(validation$city)
+validation$year<- year(validation$week_start_date)
+validation$weekofyear <- as.factor(validation$weekofyear)
+validation$month<- month(validation$week_start_date)
+validation$total_cases<-0
+
+# Combine train and validation. Then split per city
+data_full<-gdata::combine(data, validation)
+data_iq<-data_full %>% filter(city=="iq")
+data_sj<-data_full %>% filter(city=="sj")
+
+# FUNCTIONS
+# Plots geom density + variable in facet_wrap (ex. source in facet_wrap, for 
+# comparing training and validation)
+geom.density.function<- function(data, variables, fillby){
+  
+  # Melt with the selected variables
+  data<- data[variables] %>%
+    melt(fillby) %>%
+    rename("id"=fillby)
+  
+  # geom_density
+  ggplot(data, aes(x = value, fill = id)) + 
+    geom_density(alpha = 0.2) + facet_wrap(~variable, scales = "free_x")
+  
+}
+
+# Plotly with lines. Example: datetime and different variables 
+# (val and train together)
+plotly.line.function <- function(data, variables, x){
+  
+  # Melt with the selected variables
+  data<- data[variables] %>%
+    melt(x) %>%
+    rename("id"=x)
+  
+  # plotly line
+  plot_ly(data, x = ~id, y = ~value, 
+          color = ~variable, type = 'scatter', mode = 'lines') 
+
+}
+
+# REMOVE COLLINEARITY
+# By default, the threshold is going to be 0.85
+
+remove.collinearity<- function(data, indep_var, threshold=0.85){
+  
+  # 1.Check if all the variables are numeric
+  if(sum(sapply(data, is.numeric))!=ncol(data)){
+    print("You have non-numeric variables!")
+  }
+  
+  # 2. Create the correlation matrix
+  cor_indep_var<- cor(within(data, rm("total_cases")))
+  cor_indep_var[upper.tri(cor_indep_var, diag=TRUE)] <- NA
+  cor_indep_var<-as.data.frame(reshape2::melt(cor_indep_var, na.rm=TRUE, 
+                                              value.name="cor"))
+
+  cor_dep_var<- as.data.frame(cor(data)) %>% select(indep_var)
+  
+  # 3. Show collinearity
+  cor_indep_var_toremove<-cor_indep_var %>% filter(cor>=threshold)
+  
+  # 4. Remove collinearity
+  
+  # Let's create an empty vector
+  variables_to_remove<-c()
+  
+  for (i in 1:nrow(cor_indep_var_toremove)){
+    
+    # Variables to check in the correlation matrix with the dep. var.  
+    v1<- cor_indep_var_toremove[i,"Var1"] 
+    v2<- cor_indep_var_toremove[i,"Var2"]
+    
+    corv1<-abs(cor_dep_var[which(rownames(cor_dep_var)==v1),"total_cases"])
+    corv2<-abs(cor_dep_var[which(rownames(cor_dep_var)==v2),"total_cases"])
+    
+    print(paste(v1, " = ", corv1, " ", v2, " = ", corv2))
+    
+    if(corv1 >= corv2){
+      print(paste("Let's remove ", v2))
+      variables_to_remove<-append(variables_to_remove, v2)
+    
+    } 
+    
+    else{
+      print(paste("Let's remove ", v1))
+      variables_to_remove<-append(variables_to_remove, v1)
+    }
+    print("____________________________________")
+      
+  }
+  
+  data <- data %>% select(-variables_to_remove)
+}
 ```
 
+## A. EXPLORATORY ANALYSIS
 
-```{r sourceCode,echo=TRUE}
-# use source() function to source the functions we want to execute
+After renaming and transforming some variables (into factor/numeric/datetime), we start splitting the dataset in the two different cities. 
 
+### A.1. TEMPERATURE ###
+#### Distributions ####
+
+Let's compare the temperature distributions in **Iquitos**
+```{r eval=TRUE, warning=FALSE}
+#### 2.2. TEMPERATURE IQ & SJ _____________________________________________ ####
+
+# Get the temperature variables
+temp_var<-names(data[grep("temp", names(data))])
+temp_var_k<-c("temp_air_mean_r","temp_air_avg_r","temp_dewpoint_r","temp_max_r",
+            "temp_min_r")
+
+# Change everything to celsius
+data_iq[temp_var_k]<- kelvin.to.celsius(data_iq[temp_var_k], round = 2)
+data_sj[temp_var_k]<- kelvin.to.celsius(data_sj[temp_var_k], round = 2)
+
+rm(temp_var_k)
+
+# Temperature variables train & validation 
+geom.density.function(data=data_iq, variables=c(temp_var[1:10], "source"), 
+                      fill="source")
 ```
 
-## 1. EXPLORATORY ANALYSIS
-### 1. Every variable ###
-### 2. Relationship between variables 
+Let's compare the temperature distributions in **San Juan**
+
+```{r eval=TRUE, warning=FALSE}
+geom.density.function(data=data_sj, variables=c(temp_var[1:10], "source"), 
+                      fill="source")
+```
+
+#### Relations ####
+
+Let's plot together all temperature variables in **Iquitos**
+
+```{r eval=TRUE, warning=FALSE}
+# Plot the progression of the temperature variables
+plotly.line.function(data_iq,variables= c(temp_var[1:10], "total_cases", 
+                                          "week_start_date"), x="week_start_date")
+```
+
+Let's plot together all temperature variables in **San Juan** (we have divided by 10 the dependent variable for visualization purposes only)
+```{r eval=TRUE, warning=FALSE}
+datatemp_sj <- data_sj
+datatemp_sj$total_cases<-datatemp_sj$total_cases/10
+
+plotly.line.function(datatemp_sj,variables= c(temp_var[1:10], "total_cases", 
+                                          "week_start_date"), x="week_start_date")
+
+rm(temp_var, datatemp_sj)
+```
+
+### A.2. HUMIDITY & PRECIP ###
+#### Distributions ####
+
+Let's compare the humidity and precipitation distributions in **Iquitos**
+```{r eval=TRUE, warning=FALSE}
+# Get the humidity variables
+humid_precip_var<-names(data[grep("humid|precip", names(data))])
+
+# humidity variables train & validation 
+geom.density.function(data=data_iq, variables=c(humid_precip_var, "source"), 
+                      fill="source")
+```
+
+Let's compare the  humidity and precipitation distributions in **San Juan**
+
+```{r eval=TRUE, warning=FALSE}
+geom.density.function(data=data_sj, variables=c(humid_precip_var, "source"), 
+                      fill="source")
+```
+
+#### Relations ####
+Let's plot together all humidity and precipitation variables in **Iquitos**
+```{r eval=TRUE, warning=FALSE}
+# Plot the progression of the humid & precip variables
+plotly.line.function(data_iq,variables= c(humid_precip_var, "total_cases", 
+                                          "week_start_date"), x="week_start_date")
+```
+
+Let's plot together all humidity and precipitation variables in **San Juan**
+```{r eval=TRUE, warning=FALSE}
+# Plot the progression of the humid & precip variables
+plotly.line.function(data_sj,variables= c(humid_precip_var, "total_cases", 
+                                          "week_start_date"), x="week_start_date")
+rm(temp_humid_precip)
+```
+
+### A.3. VEGETATION ###
+
+#### Distributions ####
+Let's compare the vegetation distributions in **Iquitos**
+```{r eval=TRUE, warning=FALSE}
+# Get the vegetation variables
+var_veg<-names(data[grep("ndvi", names(data))])
+
+# humidity variables train & validation 
+geom.density.function(data=data_iq, variables=c(var_veg, "source"), 
+                      fill="source")
+```
+
+Let's compare the vegetation distributions in **San Juan**
+```{r eval=TRUE, warning=FALSE}
+geom.density.function(data=data_sj, variables=c(var_veg, "source"), 
+                      fill="source")
+```
+
+#### Relations ####
+Let's plot together all vegetation variables in **Iquitos** (we have multiplied by 100 the vegetation variables for visualization purposes only)
+```{r eval=TRUE, warning=FALSE}
+# Plot the progression of the veg variables
+dataveg_iq <- data_iq
+dataveg_iq[var_veg]<-dataveg_iq[var_veg]*100
+plotly.line.function(dataveg_iq,variables= c(var_veg, "total_cases", 
+                                          "week_start_date"), x="week_start_date")
+```
+
+Let's plot together all vegetation variables in **San Juan** (we have multiplied by 1000 the vegetation variables for visualization purposes only)
+```{r eval=TRUE, warning=FALSE}
+dataveg_sj <- data_sj
+dataveg_sj[var_veg]<-dataveg_sj[var_veg]*1000
+plotly.line.function(dataveg_sj,variables= c(var_veg, "total_cases", 
+                                          "week_start_date"), x="week_start_date")
+
+rm(var_veg,dataveg_iq, dataveg_sj)
+```
 
 ## 2. CLEANING 
 ## 3. TRAINING
   
-
