@@ -54,6 +54,9 @@ library(here)
 library(corrplot)
 library(weathermetrics)
 library(reshape2)
+library(tidyr)
+library(zoo)
+library(formattable)
 
 # reading datasets
 data_x <- read.csv("dengue_features_train.csv", stringsAsFactors = F)
@@ -204,12 +207,38 @@ remove.collinearity<- function(data, indep_var, threshold=0.85){
   data <- data %>% select(-variables_to_remove)
 }
 ```
+## A. FIRST CLEANING 
+### A.1. MISSING VALUES ###
 
-## A. EXPLORATORY ANALYSIS
+Let's explore where our missing values are located. For now, let's use the **na.locf** function for replacing them (although we will need to use a better way in the near future).    
+```{r eval=TRUE, warning=FALSE}
+# where and how many missing values 
+
+missing_values <- data_sj %>%
+  filter(year>2000) %>%
+  select_if(is.numeric) %>%
+  gather(key = "key", value = "val") %>%
+  mutate(is.missing = is.na(val)) %>%
+  group_by(key, is.missing) %>%
+  summarise(num.missing = n()) %>%
+  filter(is.missing==T) %>%
+  select(-is.missing) %>%
+  arrange(desc(num.missing)) 
+
+ggplot(missing_values, aes(x=key, y=num.missing, fill=key)) +
+  geom_bar(stat="identity") + 
+  theme(axis.text.x = element_text(angle=60, hjust=1)) 
+
+data_sj<-na.locf(data_sj)
+data_iq<-na.locf(data_iq)
+rm(missing_values)
+```
+
+## B. EXPLORATORY ANALYSIS
 
 After renaming and transforming some variables (into factor/numeric/datetime), we start splitting the dataset in the two different cities. 
 
-### A.1. TEMPERATURE ###
+### B.1. TEMPERATURE ###
 #### Distributions ####
 
 Let's compare the temperature distributions in **Iquitos**
@@ -260,7 +289,7 @@ plotly.line.function(datatemp_sj,variables= c(temp_var[1:10], "total_cases",
 rm(temp_var, datatemp_sj)
 ```
 
-### A.2. HUMIDITY & PRECIP ###
+### B.2. HUMIDITY & PRECIP ###
 #### Distributions ####
 
 Let's compare the humidity and precipitation distributions in **Iquitos**
@@ -296,7 +325,7 @@ plotly.line.function(data_sj,variables= c(humid_precip_var, "total_cases",
 rm(temp_humid_precip)
 ```
 
-### A.3. VEGETATION ###
+### B.3. VEGETATION ###
 
 #### Distributions ####
 Let's compare the vegetation distributions in **Iquitos**
@@ -335,6 +364,52 @@ plotly.line.function(dataveg_sj,variables= c(var_veg, "total_cases",
 rm(var_veg,dataveg_iq, dataveg_sj)
 ```
 
-## 2. CLEANING 
-## 3. TRAINING
+## C. REDUCING DIMENSIONALITY
+
+### C.1. REMOVE COLLINEARITY ###
+Let's remove those redundant predictors that are correlated with other predictors. In the table you can check those removed variables (using a threshold = 0.80)
+```{r eval=TRUE, warning=FALSE, include=FALSE}
+# Original column names
+origvar_iq<-names(data_iq)
+origvar_sj<-names(data_sj)
+
+# Save categorical variables and create a df withouth them
+cat_var<-c("week_start_date", "city", "year", "weekofyear", "source")
+data_cor_matrix_iq<- data_iq %>% select(-cat_var) 
+data_cor_matrix_sj<- data_sj %>% select(-cat_var) 
+
+# Remove collinearity from data and validation
+data_iq<-cbind(remove.collinearity(data=data_cor_matrix_iq,         # 25 <- 20
+                                   indep_var="total_cases",
+                                   threshold=0.80),data_iq[cat_var])
+
+data_sj<-cbind(remove.collinearity(data=data_cor_matrix_sj,         # 25 <- 15
+                                   indep_var="total_cases",
+                                   threshold=0.80),data_sj[cat_var])
+
+
+rm(cat_var, data_cor_matrix_iq,data_cor_matrix_sj)
+
+```
+
+
+```{r eval=TRUE, warning=FALSE}
+final_variables<-data.frame(Iquitos = names(data_full), San_Juan = names(data_full))
+rownames(final_variables)<- names(data_full)
+
+final_variables$Iquitos<-ifelse(final_variables$Iquitos %in% names(data_iq), 
+                                "Yes", "Removed")
+final_variables$San_Juan<-ifelse(final_variables$San_Juan %in% names(data_sj), 
+                                "Yes", "Removed")
+
+# Replacing empty cells with icons
+formattable(final_variables, list(
+  Iquitos = formatter("span", style = x ~ ifelse(x == "Yes", 
+    style(color = "green", font.weight = "bold"), style(color="red",font.weight = "bold"))),
+  San_Juan = formatter("span", style = x ~ ifelse(x == "Yes", 
+    style(color = "green", font.weight = "bold"), style(color="red",font.weight = "bold")))
+  
+))
+
+```
   
