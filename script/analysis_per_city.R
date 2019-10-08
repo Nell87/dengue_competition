@@ -163,10 +163,51 @@ summary(data_iq$year)     # <- 2000 to 2010
 summary(data_sj$year)     # <- 1990 to 2010
 summary(validation$year)  # <- 2008 to 2013
 
+# Some years have the week mislabeled (first week as 52/53, second week as 1...). 
+weird_weeks_iq<-data_iq %>% filter(month(data_iq$week_start_date)==1 & 
+                                data_iq$weekofyear==1 & 
+                                day(data_iq$week_start_date)!=1)
+
+weird_weeks_sj<-data_sj %>% filter(month(data_sj$week_start_date)==1 & 
+                                     data_sj$weekofyear==1 & 
+                                     day(data_sj$week_start_date)!=1)
+
+data_iq<- data_iq %>% 
+  mutate(weekofyear=as.numeric(weekofyear)) %>%
+  mutate(weekofyear=
+         ifelse (year %in% weird_weeks_iq$year & 
+                 month(week_start_date)==1 &
+                 day(week_start_date)==1,1,
+             
+         ifelse(year %in% weird_weeks_iq$year &
+                month(week_start_date)==1 &
+                day(week_start_date)!=1, weekofyear +1, weekofyear)     
+             ))
+             
+data_sj<- data_sj %>% 
+  mutate(weekofyear=as.numeric(weekofyear)) %>%
+  mutate(weekofyear=
+           ifelse (year %in% weird_weeks_sj$year & 
+                     month(week_start_date)==1 &
+                     day(week_start_date)==1,1,
+                   
+                   ifelse(year %in% weird_weeks_sj$year &
+                            month(week_start_date)==1 &
+                            day(week_start_date)!=1, weekofyear +1, weekofyear)     
+           ))
+
+data_full<- rbind(data_iq, data_sj)
+
+rm(weird_weeks_iq, weird_weeks_sj)
+
+# Cases depending on the week of the year ______________________________________
+
+
+
+
 # Remove in data years <= 1999 (validation is from 2008-2013)
 # data_sj<- data_sj %>% filter(year %in% c(2000,2001,2002, 2003, 2004, 2005, 2006,
 #                                    2007, 2008, 2009, 2010, 2011, 2012, 2013))
-
 
 #### 2.2. TEMPERATURE IQ & SJ _____________________________________________ ####
 
