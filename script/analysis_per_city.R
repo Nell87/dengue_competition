@@ -433,47 +433,11 @@ ggplot(data = training_sj, aes(x=total_cases))+
   labs(y="Density")+
   labs(x="Total cases")
 
-#### 6.   MODELING: BASELINE - RANDOM FOREST zoo NA _______________________ #### 
-# Results: RMSE  25.45    MAE   12.25   Rsquared  0.57
+#### 6.1. MODELING: RANDOM FOREST BASIC__ _________________________________ ####
+# COMPETITION MAE= 25.325
+# TESTING R2: 0.132   MAE_IQ: 13.21 
+# TESTING R2: 0.225   MAE_SJ: 
 
-# Variables
-var_imp_iq<-varImp(rf_iq, scale=T)
-var_imp_sj<-varImp(rf_sj, scale=T)
-
-
-var_relev_iq<- rownames(var_imp_iq)[order(var_imp_iq$Overall, decreasing=TRUE)][1:12]
-var_relev_sj<- rownames(var_imp_sj)[order(var_imp_sj$Overall, decreasing=TRUE)][1:12]
-
-
-training_iq<- training_iq %>% select(-c(year,week_start_date))
-training_sj<- training_sj %>% select(-c(year,week_start_date))
-
-rf_iq<-randomForest(y=training_iq$total_cases, 
-                    x= training_iq[var_relev_iq],
-                 importance=T,maximize=T,
-                 method="rf", 
-                 ntree=700)
-
-rf_sj<-randomForest(y=training_sj$total_cases, 
-                    x= training_sj[var_relev_sj],
-                    importance=T,maximize=T,
-                    method="rf", 
-                    ntree=700)
-
-
-predictions_iq<- predict(rf_iq, testing_iq)
-predictions_sj<- predict(rf_sj, testing_sj)
-
-postResample(predictions_iq, testing_iq$total_cases) 
-postResample(predictions_sj, testing_sj$total_cases) 
-
-hist(predictions_iq-testing_iq$total_cases)
-hist(predictions_sj-testing_sj$total_cases)
-
-rm(var_imp_iq, var_imp_sj, predictions_iq, predictions_sj, rf_iq, rf_sj,
-   var_relev_iq, var_relev_sj)
-
-#### 6.1. MODELING: RANDOM FOREST WITH EVERYTHING __________________________ ####
 rf_iq<-randomForest(total_cases~.,data=training_iq,
                     importance=T,maximize=T,
                     method="rf", 
@@ -492,6 +456,20 @@ postResample(predictions_sj, testing_sj$total_cases)
 
 hist(predictions_iq-testing_iq$total_cases)
 hist(predictions_sj-testing_sj$total_cases)
+
+plotting_iq<-cbind(testing_iq, predictions=predictions_iq) %>% 
+  select(week_start_date, total_cases, predictions) %>% 
+  gather("total_cases", "predictions", key="source", value="number")
+
+ggplot(data=plotting_iq, aes(x=week_start_date, y=number, color=source)) +
+  geom_point() 
+
+plotting_sj<-cbind(testing_sj, predictions=predictions_sj) %>% 
+  select(week_start_date, total_cases, predictions) %>% 
+  gather("total_cases", "predictions", key="source", value="number")
+
+ggplot(data=plotting_sj, aes(x=week_start_date, y=number, color=source)) +
+  geom_point() 
 
 # Final model
 rf_iq<-randomForest(total_cases~.,data=data_iq_withlags_data,
@@ -516,7 +494,10 @@ validation_sj<- na.locf(validation_sj)
 
 predictions_iq<- predict(rf_iq, validation_iq)
 predictions_iq<- round(predictions_iq)
-predictions_iq
+
+# I'm overestimating in Iquitos, so let's reduce the prediction in 5 points
+predictions_iq<-predictions_iq-5
+predictions_iq<-ifelse(predictions_iq < 0, 0, predictions_iq)
 
 validation_iq<- validation_iq %>% mutate(total_cases=predictions_iq) %>% 
   arrange(week_start_date) %>%
@@ -531,7 +512,11 @@ validation_sj<- validation_sj %>% mutate(total_cases=predictions_sj) %>%
 
 final_dataset<- rbind(validation_sj,validation_iq) 
 
-write.csv(final_dataset,"./submissions/solution7.csv",row.names=FALSE)
+#### FINAL: CREATING NEW CSV ####
+ # sample_sub<-read.csv("./data/submission_format.csv")
+ # final_dataset<-cbind(sample_sub[c("city", "year","weekofyear")], total_cases=final_dataset$total_cases)
+ # 
+ # write.csv(final_dataset,"./submissions/solution8.csv",row.names=FALSE)
 
 
 
