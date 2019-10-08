@@ -2,6 +2,6 @@ The goal is to **predict the number of dengue cases each week (in two different 
 
 You can read more about this competition [here](https://www.drivendata.org/competitions/44/dengai-predicting-disease-spread/). 
 
-**MAE** of 25.92
+**MAE** of 25.32
 
-**CURRENT RANK**: 1263/7338
+**CURRENT RANK**: 875 / 7338
