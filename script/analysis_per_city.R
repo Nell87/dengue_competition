@@ -8,7 +8,7 @@ if(require("pacman")=="FALSE"){
 
 pacman::p_load(rstudioapi,dplyr, ggplot2, lubridate, randomForest, caret, 
                rpart,rpart.plot,tidyr, mice,e1071,zoo,reshape2, plotly,
-               weathermetrics,gdata,outliers)
+               weathermetrics,gdata,outliers,gridExtra)
 
 # Setwd (set current wd where is the script, then we move back to the 
 # general folder)
@@ -201,9 +201,19 @@ data_full<- rbind(data_iq, data_sj)
 rm(weird_weeks_iq, weird_weeks_sj)
 
 # Cases depending on the week of the year ______________________________________
+p_iquitos<-ggplot(data_full[data_full$source=="data" & data_full$city=="iq",], 
+       aes(x=weekofyear, y=total_cases, color=factor(year))) + 
+       geom_point() + ggtitle("Total cases per week -Iquitos-") +
+  guides(colour = guide_legend(ncol = 2))
+
+p_sanjuan<-ggplot(data_full[data_full$source=="data" & data_full$city=="sj",], 
+                  aes(x=weekofyear, y=total_cases, color=factor(year))) + 
+                  geom_point() + ggtitle("Total cases per week -San Juan-") +
+  guides(colour = guide_legend(ncol = 2))
 
 
-
+grid.arrange(p_iquitos, p_sanjuan, ncol=1)
+rm(p_iquitos, p_sanjuan)
 
 # Remove in data years <= 1999 (validation is from 2008-2013)
 # data_sj<- data_sj %>% filter(year %in% c(2000,2001,2002, 2003, 2004, 2005, 2006,
@@ -303,8 +313,6 @@ plotly.line.function(dataveg_sj,variables= c(var_veg, "total_cases",
 rm(var_veg,dataveg_iq, dataveg_sj)
 
 #### 3.0  FEATURE ENGINEERING _____________________________________________ ####
-
-
 #### 4.0  RELATIONSHIP BETWEEEN VARIABLES #### 
 
 #### 4.1. REMOVE COLLINEARITY _____________________________________________ #### 
@@ -315,11 +323,11 @@ data_cor_matrix_iq<- data_iq %>% select(-cat_var)
 data_cor_matrix_sj<- data_sj %>% select(-cat_var) 
 
 # Remove collinearity from data and validation
-data_iq<-cbind(remove.collinearity(data=data_cor_matrix_iq,         # 25 <- 20
+data_iq<-cbind(remove.collinearity(data=data_cor_matrix_iq,         # 27 <- 23
                                    indep_var="total_cases",
                                    threshold=0.80),data_iq[cat_var])
 
-data_sj<-cbind(remove.collinearity(data=data_cor_matrix_sj,         # 25 <- 15
+data_sj<-cbind(remove.collinearity(data=data_cor_matrix_sj,         # 27 <- 18
                                    indep_var="total_cases",
                                    threshold=0.80),data_sj[cat_var])
 
@@ -328,19 +336,48 @@ rm(cat_var, data_cor_matrix_iq,data_cor_matrix_sj)
 
 
 #### 4.2. VAR IMP WITH RANDOM FOREST_______________________________________ ####
+# Let's create new variables using the lag
+var_lag_iq<-names(data_iq %>% select(-c(year, weekofyear, source, city, week_start_date, month,
+                            total_cases)))
+
+var_lag_sj<-names(data_sj %>% select(-c(year, weekofyear, source, city, week_start_date, month,
+                            total_cases)))
+
+data_iq_lag1<-sapply(data_iq[var_lag_iq], lag)
+colnames(data_iq_lag1) <- paste(colnames(data_iq_lag1), 'lag01', sep='_')
+
+data_iq_lag2<-apply(data_iq[var_lag_iq], 2,function(x) lag(x,n=2))
+colnames(data_iq_lag2) <- paste(colnames(data_iq_lag2), 'lag02', sep='_')
+
+data_sj_lag1<-sapply(data_sj[var_lag_sj], lag)
+colnames(data_sj_lag1) <- paste(colnames(data_sj_lag1), 'lag01', sep='_')
+
+data_sj_lag2<-apply(data_sj[var_lag_sj], 2,function(x) lag(x,n=2))
+colnames(data_sj_lag2) <- paste(colnames(data_sj_lag2), 'lag02', sep='_')
+
+data_iq_withlags<-cbind(data_iq, data_iq_lag1, data_iq_lag2)
+data_sj_withlags<-cbind(data_sj, data_sj_lag1, data_sj_lag2)
+
+rm(data_sj_lag1, data_sj_lag2, data_iq_lag1, data_iq_lag2, 
+   var_lag_iq, var_lag_sj)
 
 # Let's remove the validation
-data_iq<- data_iq %>% filter(source=="data")
-data_sj<- data_sj %>% filter(source=="data")
+data_iq_withlags_data<- data_iq_withlags %>% 
+  filter(source=="data")%>% 
+  filter(complete.cases(.))
+
+data_sj_withlags_data<- data_sj_withlags %>% 
+  filter(source=="data")%>% 
+  filter(complete.cases(.))
 
 rf_iq<-randomForest(total_cases~. -year-week_start_date-source, 
-                    data= data_iq, 
+                    data= data_iq_withlags_data, 
                     importance=T,maximize=T,
                     method="rf", 
                     ntree=500)
 
 rf_sj<-randomForest(total_cases~. -year-week_start_date-source, 
-                    data= data_sj,
+                    data= data_sj_withlags_data,
                     importance=T,maximize=T,
                     method="rf", 
                     ntree=500)
@@ -349,11 +386,11 @@ varImp(rf_iq, scale=T)
 varImp(rf_sj, scale=T)
 
 #### 4.3. rpart ___________________________________________________________ ####
-rpart_iq <- rpart(total_cases~., data=data_iq[ , -which(names(data_iq) %in% 
+rpart_iq <- rpart(total_cases~., data=data_iq_withlags[ , -which(names(data_iq) %in% 
             c("year","week_start_date", "weekofyear"))], 
             control = list(maxdepth = 4, minbucket=25))
 
-rpart_sj <- rpart(total_cases~., data=data_sj[ , -which(names(data_sj) %in% 
+rpart_sj <- rpart(total_cases~., data=data_sj_withlags[ , -which(names(data_sj) %in% 
             c("year","week_start_date", "weekofyear"))], 
             control = list(maxdepth = 4, minbucket=25))
 
@@ -373,11 +410,11 @@ rm(rpart_iq, rpart_sj)
 
 # rm(indices_iq, indices_sj)
 
-training_iq<- data_iq %>% filter(year<=year("2008-01-01"))
-testing_iq <- data_iq %>% filter(year>=year("2009-01-01"))
+training_iq<- data_iq_withlags_data %>% filter(year<=year("2008-01-01"))
+testing_iq <- data_iq_withlags_data %>% filter(year>=year("2009-01-01"))
 
-training_sj<- data_sj %>% filter(year<=year("2006-01-01"))
-testing_sj <- data_sj %>% filter(year>=year("2007-01-01"))
+training_sj<- data_sj_withlags_data %>% filter(year<=year("2006-01-01"))
+testing_sj <- data_sj_withlags_data %>% filter(year>=year("2007-01-01"))
 
 # Let's check if we have the same distribution in our dependent variable
 ggplot(data = training_iq, aes(x=total_cases))+
@@ -404,8 +441,8 @@ var_imp_iq<-varImp(rf_iq, scale=T)
 var_imp_sj<-varImp(rf_sj, scale=T)
 
 
-var_relev_iq<- rownames(var_imp_iq)[order(var_imp_iq$Overall, decreasing=TRUE)][1:6]
-var_relev_sj<- rownames(var_imp_sj)[order(var_imp_sj$Overall, decreasing=TRUE)][1:6]
+var_relev_iq<- rownames(var_imp_iq)[order(var_imp_iq$Overall, decreasing=TRUE)][1:12]
+var_relev_sj<- rownames(var_imp_sj)[order(var_imp_sj$Overall, decreasing=TRUE)][1:12]
 
 
 training_iq<- training_iq %>% select(-c(year,week_start_date))
@@ -433,10 +470,46 @@ postResample(predictions_sj, testing_sj$total_cases)
 hist(predictions_iq-testing_iq$total_cases)
 hist(predictions_sj-testing_sj$total_cases)
 
+rm(var_imp_iq, var_imp_sj, predictions_iq, predictions_sj, rf_iq, rf_sj,
+   var_relev_iq, var_relev_sj)
+
+#### 6.1. MODELING: RANDOM FOREST WITH EVERYTHING __________________________ ####
+rf_iq<-randomForest(total_cases~.,data=training_iq,
+                    importance=T,maximize=T,
+                    method="rf", 
+                    ntree=700)
+
+rf_sj<-randomForest(total_cases~.,data=training_sj,
+                    importance=T,maximize=T,
+                    method="rf", 
+                    ntree=700)
+
+predictions_iq<- predict(rf_iq, testing_iq)
+predictions_sj<- predict(rf_sj, testing_sj)
+
+postResample(predictions_iq, testing_iq$total_cases) 
+postResample(predictions_sj, testing_sj$total_cases) 
+
+hist(predictions_iq-testing_iq$total_cases)
+hist(predictions_sj-testing_sj$total_cases)
+
+# Final model
+rf_iq<-randomForest(total_cases~.,data=data_iq_withlags_data,
+                    importance=T,maximize=T,
+                    method="rf", 
+                    ntree=700)
+
+rf_sj<-randomForest(total_cases~.,data=data_sj_withlags_data,
+                    importance=T,maximize=T,
+                    method="rf", 
+                    ntree=700)
+
 #### 7.   VALIDATION ####
-validation$total_cases<- NULL
-validation_iq<- validation %>% filter(city=="iq")
-validation_sj<- validation %>% filter(city=="sj")
+validation_iq<- data_iq_withlags %>% filter(city=="iq") %>% 
+  filter(source=="validation")
+
+validation_sj<- data_sj_withlags %>% filter(city=="sj") %>% 
+  filter(source=="validation")
 
 validation_iq<- na.locf(validation_iq)
 validation_sj<- na.locf(validation_sj)
@@ -445,20 +518,20 @@ predictions_iq<- predict(rf_iq, validation_iq)
 predictions_iq<- round(predictions_iq)
 predictions_iq
 
-validation_iq<- cbind(validation_iq, total_cases=predictions_iq) %>% 
+validation_iq<- validation_iq %>% mutate(total_cases=predictions_iq) %>% 
   arrange(week_start_date) %>%
   select(city, year, weekofyear, total_cases)
 
 predictions_sj<- predict(rf_sj, validation_sj)
 predictions_sj<- round(predictions_sj)
 predictions_sj
-validation_sj<- cbind(validation_sj, total_cases=predictions_sj) %>% 
+validation_sj<- validation_sj %>% mutate(total_cases=predictions_sj) %>% 
   arrange(week_start_date) %>%
   select(city, year, weekofyear, total_cases)
 
 final_dataset<- rbind(validation_sj,validation_iq) 
 
-#write.csv(final_dataset,"./submissions/solution6.csv",row.names=FALSE)
+write.csv(final_dataset,"./submissions/solution7.csv",row.names=FALSE)
 
 
 
