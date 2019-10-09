@@ -50,8 +50,6 @@ library(ggplot2)
 library(lubridate)
 library(plotly)
 library(gdata)
-library(here)
-library(corrplot)
 library(weathermetrics)
 library(reshape2)
 library(tidyr)
@@ -211,29 +209,20 @@ remove.collinearity<- function(data, indep_var, threshold=0.85){
 ## A. FIRST CLEANING 
 ### A.1. MISSING VALUES ###
 
-Let's explore where our missing values are located. For now, let's use the **na.locf** function for replacing them (although we will need to use a better way in the near future).    
-```{r eval=TRUE, warning=FALSE}
-# where and how many missing values 
+Let's explore where our missing values are located. For now, let's use the **na.locf** function for replacing them (although we will need to use a better way in the near future).  
 
-missing_values <- data_sj %>%
-  filter(year>2000) %>%
-  select_if(is.numeric) %>%
-  gather(key = "key", value = "val") %>%
-  mutate(is.missing = is.na(val)) %>%
-  group_by(key, is.missing) %>%
-  summarise(num.missing = n()) %>%
-  filter(is.missing==T) %>%
-  select(-is.missing) %>%
-  arrange(desc(num.missing)) 
+![](dengue_missingvalues.png){width=700px}
 
-ggplot(missing_values, aes(x=key, y=num.missing, fill=key)) +
-  geom_bar(stat="identity") + 
-  theme(axis.text.x = element_text(angle=60, hjust=1)) 
-
+```{r eval=TRUE, echo=FALSE, warning=FALSE, include=FALSE}
 data_sj<-na.locf(data_sj)
 data_iq<-na.locf(data_iq)
-rm(missing_values)
+data_full<-rbind(data_sj, data_iq)
+
 ```
+### A.2. OUTLIERS ###
+It seems that we have big outliers in some variables (specially in the level of precipitations).
+
+![](dengue_total_outliers.png){width=700px}
 
 ## B. EXPLORATORY ANALYSIS
 
@@ -279,23 +268,8 @@ data_full<- rbind(data_iq, data_sj)
 
 rm(weird_weeks_iq, weird_weeks_sj)
 ```
-```{r eval=TRUE}
-# Cases depending on the week of the year ______________________________________
-p_iquitos<-ggplot(data_full[data_full$source=="data" & data_full$city=="iq",], 
-       aes(x=weekofyear, y=total_cases, color=factor(year))) + 
-       geom_point() + ggtitle("Total cases per week -Iquitos-") +
-  guides(colour = guide_legend(ncol = 2))
 
-
-
-p_sanjuan<-ggplot(data_full[data_full$source=="data" & data_full$city=="sj",], 
-                  aes(x=weekofyear, y=total_cases, color=factor(year))) + 
-                  geom_point() + ggtitle("Total cases per week -San Juan-") +
-  guides(colour = guide_legend(ncol = 2))
-
-
-grid.arrange(p_iquitos, p_sanjuan, ncol=1)
-```
+![](dengue_totalcases_perweek.png){width=700px}
 
 ### B.1. TEMPERATURE ###
 #### Distributions ####
