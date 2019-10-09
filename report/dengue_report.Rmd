@@ -425,7 +425,6 @@ rm(cat_var, data_cor_matrix_iq,data_cor_matrix_sj)
 
 ```
 
-
 ```{r eval=TRUE, warning=FALSE}
 final_variables<-data.frame(Iquitos = names(data_full), San_Juan = names(data_full))
 rownames(final_variables)<- names(data_full)
@@ -445,6 +444,40 @@ formattable(final_variables, list(
 ))
 
 ```
+
+## D. FEATURE ENGINEERING
+As we know, in dengue fever we have an incubation period of 4-10 days after the bite, so we're going to create **lag features**. These new features are going to describe the environmental variables like they were one week and two weeks in the past (when the person could have been bitten).
+
+## E. MODELING & ANALYSIS 
+Our base model is going to be a **Random Forest** with all the variables that we have until now. The first step would be to **split the dataset into training and testing**. Our first trial was to use the last two/three years for testing (although we faced the problem that the distributions were not similar).</br>
+
+<ul>
+  <li>**Iquitos**:  Training (2000-2008) Testing (2009-2010)</li>
+  <li>**San Juan**: Training (1990-2005) Testing (2006-2008)</li>
+</ul>
+
+![](total_cases.png){width=700px}
+
+These were the results.As we can see:
+<ul>
+  <li>**In Iquitos** our models tends to increase the number of cases. Because of this, we decided to decrease the predictions by 5 points.</li>
+  <li>**In San Juan** the main problem was that our model was not able to predict the huge peak. </li>
+</ul>
+
+![](analysis_error_basicRF.png){width=700px}
+
+## F. RESULTS
+**With this approach, we have a MAE of  25.32**. 
+
+![](Ranking.PNG){width=700px}
+
+**Next steps**:
+<ul>
+  <li>Use powerful r packages, like MICE or Amelia, for imputing missing values</li>
+  <li>Time series analysis</li>
+  <li>Deeper analysis of the outliers</li>
+  <li>A better way of splitting into training/testing</li>
+</ul>
 
 ## G. COMPLETE CODE
 If you want to check the complete code of this project, you can visit the [repository on GitHub](https://github.com/Nell87/dengue_competition)

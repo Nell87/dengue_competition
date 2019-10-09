@@ -409,29 +409,40 @@ rm(rpart_iq, rpart_sj)
 # testing_sj<- data_sj[-indices_sj,]
 
 # rm(indices_iq, indices_sj)
+# Let's check the distribution of the total cases per city
+p_iq<-ggplot(data_iq_withlags_data, 
+             aes(x=week_start_date, y=total_cases, color="Iquitos")) + 
+             geom_line(color="red")+
+             scale_x_date(limits = as.Date(c('1990-01-01','2011-01-01'))) +
+             ggtitle("Total cases -Iquitos-") +
+             geom_vline(xintercept = as.Date("2009-01-01"))
+
+p_sj<-ggplot(data_sj_withlags_data, 
+             aes(x=week_start_date, y=total_cases, color="San Juan")) + 
+             geom_line(color="blue")+
+             scale_x_date(limits = as.Date(c('1990-01-01','2011-01-01'))) +
+             ggtitle("Total cases -San Juan-") + 
+             geom_vline(xintercept = as.Date("2006-01-01"))
+
+grid.arrange(p_iq, p_sj, ncol=1)
+
 
 training_iq<- data_iq_withlags_data %>% filter(year<=year("2008-01-01"))
 testing_iq <- data_iq_withlags_data %>% filter(year>=year("2009-01-01"))
 
-training_sj<- data_sj_withlags_data %>% filter(year<=year("2006-01-01"))
-testing_sj <- data_sj_withlags_data %>% filter(year>=year("2007-01-01"))
+training_sj<- data_sj_withlags_data %>% filter(year<=year("2005-01-01"))
+testing_sj <- data_sj_withlags_data %>% filter(year>=year("2006-01-01"))
+
 
 # Let's check if we have the same distribution in our dependent variable
-ggplot(data = training_iq, aes(x=total_cases))+
-  geom_density(fill="blue",alpha = 0.2) +
-  # Change the fill colour to differentiate it
-  geom_density(data=testing_iq, fill="red",alpha = 0.2) +
-  labs(title = "Distribution of total cases training/testing")+
-  labs(y="Density")+
-  labs(x="Total cases")
+training_iq_sum<-training_iq %>% group_by(weekofyear) %>% summarise(total_cases= median(total_cases))
+testing_iq_sum<-testing_iq %>% group_by(weekofyear) %>% summarise(total_cases= median(total_cases))
 
-ggplot(data = training_sj, aes(x=total_cases))+
-  geom_density(fill="blue",alpha = 0.2) +
-  # Change the fill colour to differentiate it
-  geom_density(data=testing_sj, fill="red",alpha = 0.2) +
-  labs(title = "Distribution of total cases training/testing")+
-  labs(y="Density")+
-  labs(x="Total cases")
+ggplot(data = training_iq_sum, aes(x=weekofyear, y=total_cases, color="train"))+
+  geom_line()+
+  geom_line(data=testing_iq_sum, aes(x=weekofyear, y=total_cases, color="test"))
+
+rm(training_iq_sum, testing_iq_sum)
 
 #### 6.1. MODELING: RANDOM FOREST BASIC__ _________________________________ ####
 # COMPETITION MAE= 25.325
@@ -461,15 +472,17 @@ plotting_iq<-cbind(testing_iq, predictions=predictions_iq) %>%
   select(week_start_date, total_cases, predictions) %>% 
   gather("total_cases", "predictions", key="source", value="number")
 
-ggplot(data=plotting_iq, aes(x=week_start_date, y=number, color=source)) +
-  geom_point() 
+p_iq<-ggplot(data=plotting_iq, aes(x=week_start_date, y=number, color=source)) +
+  geom_line() + ggtitle("Analysis of Error -Iquitos-")
 
 plotting_sj<-cbind(testing_sj, predictions=predictions_sj) %>% 
   select(week_start_date, total_cases, predictions) %>% 
-  gather("total_cases", "predictions", key="source", value="number")
+  gather("total_cases", "predictions", key="source", value="number") 
 
-ggplot(data=plotting_sj, aes(x=week_start_date, y=number, color=source)) +
-  geom_point() 
+p_sj<-ggplot(data=plotting_sj, aes(x=week_start_date, y=number, color=source)) +
+  geom_line() + ggtitle("Analysis of Error -San Juan-")
+
+grid.arrange(p_iq, p_sj, ncol=1)
 
 # Final model
 rf_iq<-randomForest(total_cases~.,data=data_iq_withlags_data,
